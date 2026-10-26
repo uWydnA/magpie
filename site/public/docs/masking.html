@@ -129,6 +129,27 @@
     </div>
     <p>When the model answers <em>“I set OPENAI_API_KEY to {{API_KEY_srhjgvja}} in .env”</em>, your agent reads the real key there, in streamed text and tool-call arguments alike, so the file it writes has the real key. A placeholder the model rewrote a little (spaces inside the braces, another case) is still turned back.</p>
 
+    <h2 id="agent"><a class="anchor" href="#agent">What the agent makes of a placeholder</a></h2>
+    <p>A placeholder is not a reference. Nothing resolves it: the value is held in magpie’s memory and put back in the reply. The model doesn’t know that. An agent that reads <code>{{SECRET_…}}</code> in a tool result, where the real token used to be, may take the text for a variable of the agent’s own tooling and go looking for whatever fills it in — the keychain, a database, an environment variable. On 2026-10-26 an agent on a DeepSeek model did exactly that: it read the tokens out of a config file as placeholders, said they were “stored as references”, and spent most of its 26 turns hunting for the store instead of using the token it already had.</p>
+    <p>Two things keep it from that turn:</p>
+    <ul>
+      <li><b>Say it in the agent’s instructions.</b> One paragraph in <code>AGENTS.md</code>, <code>CLAUDE.md</code> or the agent’s system prompt is read on every turn, and a masked value then reads as “paste this back as it is” rather than as a puzzle:</li>
+    </ul>
+    <div class="code">
+      <span class="lang">AGENTS.md</span>
+      <pre>Text shaped like {{SECRET_xxxxxxxx}} or {{API_KEY_xxxxxxxx}} is masked by the local proxy.
+Copy it whole into a command or a file: the real value is put back before the command runs
+or the file is written. It is not a reference to a store — don’t look for one, and don’t
+shorten, join or re-case it.
+
+You can’t read a masked value: comparing two, taking its first characters, checking its
+length or decoding it fails. If a task needs that, ask for the value to be unmasked.</pre>
+    </div>
+    <ul>
+      <li><b>Never mask what the task has to read.</b> A value the agent must compare, decode or tell apart goes under <span class="ui">Never mask</span>. Only a value it has to pass on can stay masked.</li>
+    </ul>
+    <p><span class="ui">Keep a key’s form</span> takes the other way around it: a key with a prefix magpie knows (<code>sk-…</code>, <code>ghp_…</code>) goes as a made-up key of the same form, and no placeholder is in the text at all. The agent then sees something that looks like a key, so it still has to be told not to use it as one.</p>
+
     <h2 id="check"><a class="anchor" href="#check">Check that it works</a></h2>
     <ul>
       <li><b>Before:</b> <span class="ui">Try it</span> on <span class="ui">Settings</span> → <span class="ui">Privacy</span> shows the text as the vendor would get it, with each value’s kind.</li>
@@ -153,7 +174,7 @@
       <li><b>Images and file data are sent as they are.</b> Text inside a screenshot is not masked.</li>
       <li><b>It fails closed.</b> If masking is on and can’t run (the <span class="ui">Privacy masking</span> plugin turned off by hand, or the local model is on and can’t answer), the request gets a 503 that says nothing was sent. It is never sent unmasked instead.</li>
       <li><b>Local models can skip it.</b> <span class="ui">Send requests unmasked</span> on a provider whose every address is on this computer or your local network (Ollama, LM Studio) sends its requests as written; <code>magpie provider set ollama unmasked=yes</code> does the same. The logs keep the masked body.</li>
-      <li><b>The model sees placeholders.</b> It can’t read or reason about a masked value; it can only pass it on. Put a value it must read under <span class="ui">Never mask</span>.</li>
+      <li><b>The model sees placeholders.</b> It can’t read or reason about a masked value; it can only pass it on. Put a value it must read under <span class="ui">Never mask</span>, and tell the agent what a placeholder is (<a href="#agent">above</a>).</li>
       <li><b>Rules find shapes.</b> A phone number in another country’s format or a name in free text needs <span class="ui">Find with a local model</span>, or your own <span class="ui">Masked words</span> and <span class="ui">Masking rules</span>. Try your own text in <span class="ui">Try it</span> first.</li>
     </ul>
     <p>See also <a href="/docs/privacy">Privacy</a> for everything magpie sends by itself. The code is <a href="https://github.com/yetone/magpie/tree/main/internal/redact">internal/redact</a> and <a href="https://github.com/yetone/magpie/blob/main/internal/masking/masking.go">internal/masking</a>.</p>
